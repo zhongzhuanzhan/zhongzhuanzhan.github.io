@@ -24,6 +24,7 @@ npm test
 
 - `index.html`：榜单第 1 页及完整选择指南
 - `page/*/index.html`：后续静态分页
+- `*-zhongzhuanzhan/index.html`：GPT、Claude、Codex、Gemini、GLM、Qwen、Kimi 模型专题页
 - `sitemap.xml`：构建时按实际分页更新
 - `data.json`：站点数据快照
 

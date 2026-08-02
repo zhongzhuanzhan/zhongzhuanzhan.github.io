@@ -102,6 +102,65 @@ const FAQ = [
   },
 ];
 
+const TOPICS = [
+  {
+    slug: "gpt-zhongzhuanzhan",
+    label: "GPT 中转站",
+    short: "GPT / OpenAI",
+    terms: ["gpt", "openai", "chatgpt"],
+    intro: "GPT 中转站通常提供 OpenAI 兼容接口，适合对话、代码、结构化输出、工具调用和多模态任务。除了模型名称，还要核对 Responses API、Chat Completions、上下文长度、缓存和具体版本映射。",
+    focus: ["确认 GPT 具体版本与上下文长度", "测试 Responses API 和工具调用", "验证图片、文件与结构化输出", "分别复算输入、输出和缓存费用"],
+  },
+  {
+    slug: "claude-zhongzhuanzhan",
+    label: "Claude 中转站",
+    short: "Claude / Anthropic",
+    terms: ["claude", "anthropic"],
+    intro: "Claude 中转站常用于长文本、代码和 Agent 任务。选择时应确认 Anthropic 原生协议或兼容层差异，并重点测试 Prompt Caching、工具调用、长输出稳定性以及 Sonnet、Opus 等版本映射。",
+    focus: ["核对 Claude 版本和模型映射", "测试长输出与工具调用断流", "检查缓存写入和读取明细", "确认 Anthropic 原生协议兼容性"],
+  },
+  {
+    slug: "codex-zhongzhuanzhan",
+    label: "Codex 中转站",
+    short: "Codex",
+    terms: ["codex"],
+    intro: "Codex 中转站面向代码生成、仓库分析和编程 Agent。普通聊天可用不代表长任务稳定，应使用真实代码仓库测试工具调用、上下文缓存、并发、错误恢复以及 Codex 客户端所需的接口能力。",
+    focus: ["验证 Codex 客户端接入方式", "用多文件任务测试完整成功率", "检查长上下文、缓存和并发", "准备可快速切换的备用接口"],
+  },
+  {
+    slug: "gemini-zhongzhuanzhan",
+    label: "Gemini 中转站",
+    short: "Gemini / Google",
+    terms: ["gemini"],
+    intro: "Gemini 中转站常用于多模态、长上下文、代码和文档处理。需要区分 Gemini 原生接口与 OpenAI 兼容接口，并分别测试图片、文件、工具调用、安全过滤和具体模型版本。",
+    focus: ["确认原生 Gemini 或兼容协议", "测试图片、文件和多模态输入", "核对安全过滤与错误返回", "检查模型版本和上下文限制"],
+  },
+  {
+    slug: "glm-zhongzhuanzhan",
+    label: "GLM 中转站",
+    short: "GLM / 智谱",
+    terms: ["glm", "智谱"],
+    intro: "GLM 中转站主要提供智谱 GLM 系列模型的统一 API 接入。应确认具体型号、工具调用、结构化输出、视觉能力和上下文限制，并检查兼容接口是否完整保留智谱原生能力。",
+    focus: ["核对 GLM 具体型号", "测试工具调用、JSON 和视觉能力", "确认上下文、并发与限流", "检查原生能力在兼容层的差异"],
+  },
+  {
+    slug: "qwen-zhongzhuanzhan",
+    label: "Qwen 中转站",
+    short: "Qwen / 通义千问",
+    terms: ["qwen", "通义", "千问"],
+    intro: "Qwen 中转站覆盖通义千问文本、代码和多模态模型。选择时要区分不同尺寸与用途，确认上下文、视觉或音频能力、工具调用、兼容协议和实际调用价格。",
+    focus: ["区分 Qwen 不同尺寸和用途", "测试文本、代码与多模态能力", "确认原生协议和兼容层差异", "核对上下文、限流和调用价格"],
+  },
+  {
+    slug: "kimi-zhongzhuanzhan",
+    label: "Kimi 中转站",
+    short: "Kimi / 月之暗面",
+    terms: ["kimi", "moonshot", "月之暗面"],
+    intro: "Kimi 中转站常用于中文长文本、文件处理和对话场景。应核对 Moonshot 或 Kimi 具体模型、上下文长度、文件能力、工具调用和费用，避免直接用网页会员体验推断 API 能力。",
+    focus: ["确认 Kimi 与 Moonshot 模型映射", "测试中文长文本和文件处理", "检查上下文长度与超限行为", "区分网页会员能力和 API 计费"],
+  },
+];
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -394,6 +453,134 @@ function renderPagination(current, total) {
           </nav>`;
 }
 
+function topicMatches(site, topic) {
+  const searchable = [site.name, site.description, ...site.models].join(" ").toLowerCase();
+  return topic.terms.some((term) => searchable.includes(term.toLowerCase()));
+}
+
+function topicFaq(topic) {
+  return [
+    [`${topic.label}应该怎么选择？`, `先确认候选站明确支持所需模型和接口，再用自己的真实任务测试流式输出、工具调用、上下文、成功率和账单。重点完成：${topic.focus.join("；")}。不要只依据首页价格或一次短对话决定长期使用。`],
+    [`${topic.label}的价格应该怎样比较？`, "统一换算人民币充值比例、输入价格、输出价格、缓存读写、模型倍率和用户分组倍率，再复算一条实际请求。面板显示为美元不代表等同官方美元，低倍率也不代表所有模型和渠道采用相同价格。"],
+    [`${topic.label}适合直接用于生产环境吗？`, "个人学习和能够随时迁移的任务可以先小额测试。生产环境还要评估数据隐私、运营主体、日志政策、限流、故障公告和备用供应商；涉及敏感数据或强 SLA 时，应优先考虑官方 API 或可签约的企业服务。"],
+    [`如何验证 ${topic.label} 宣传的模型和能力？`, `使用固定测试集核对模型标识、上下文、流式响应、工具调用和账单模型名，并完成专项验证：${topic.focus.join("；")}。模型自报身份不能作为证据，关键能力缺失或账单无法复算时应暂停继续充值。`],
+  ];
+}
+
+function topicStats(sites) {
+  const stats = pageStats(sites);
+  const modelCounts = sites.map((site) => site.modelCount).filter((value) => value > 0);
+  return { ...stats, modelCount: { value: median(modelCounts), sample: modelCounts.length } };
+}
+
+function renderTopicDirectory(allSites, currentSlug = "") {
+  const cards = TOPICS.map((topic) => {
+    const matches = allSites.filter((site) => topicMatches(site, topic));
+    const link = currentSlug === topic.slug
+      ? `<span class="topic-directory__current" aria-current="page">当前专题</span>`
+      : `<a href="/${topic.slug}/">查看 ${escapeHtml(topic.label)} →</a>`;
+    return `          <article><span>${escapeHtml(topic.short)}</span><h3>${escapeHtml(topic.label)}</h3><p>${escapeHtml(topic.intro)}</p><div><strong>${matches.length}</strong><small>家公开资料匹配</small>${link}</div></article>`;
+  }).join("\n");
+  return `      <section class="topic-directory" id="topics" aria-labelledby="topics-title">
+        <div class="topic-directory__head"><div><p class="section-kicker">模型专题</p><h2 id="topics-title">按模型查找中转站</h2></div><p>每个专题都提供独立候选列表、数据概览、接入检查项和常见问题。公开资料匹配只用于建立候选范围，实际模型与价格仍需进入站点核对并小额测试。</p></div>
+        <div class="topic-directory__grid">
+${cards}
+        </div>
+      </section>`;
+}
+
+function renderTopicStructuredData({ topic, canonical, title, description, sites, totalMatches, updatedDate }) {
+  const faq = topicFaq(topic);
+  const graph = [{
+    "@type": "WebSite", "@id": `${ORIGIN}/#website`, url: `${ORIGIN}/`, name: "中转站推荐榜", inLanguage: "zh-CN",
+  }, {
+    "@type": "CollectionPage", "@id": `${canonical}#webpage`, url: canonical, name: title, description,
+    dateModified: updatedDate, inLanguage: "zh-CN", isPartOf: { "@id": `${ORIGIN}/#website` },
+    breadcrumb: { "@id": `${canonical}#breadcrumb` }, mainEntity: { "@id": `${canonical}#ranking` },
+  }, {
+    "@type": "BreadcrumbList", "@id": `${canonical}#breadcrumb`, itemListElement: [
+      { "@type": "ListItem", position: 1, name: "中转站推荐榜", item: `${ORIGIN}/` },
+      { "@type": "ListItem", position: 2, name: topic.label, item: canonical },
+    ],
+  }, {
+    "@type": "ItemList", "@id": `${canonical}#ranking`, name: `${topic.label}候选列表`, numberOfItems: totalMatches,
+    itemListOrder: "https://schema.org/ItemListOrderAscending",
+    itemListElement: sites.map((site, index) => ({
+      "@type": "ListItem", position: index + 1,
+      item: { "@type": "Service", name: site.name, url: site.url, description: objectiveSiteSummary(site) },
+    })),
+  }, {
+    "@type": "FAQPage", "@id": `${canonical}#faq`, mainEntity: faq.map(([question, answer]) => ({
+      "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer },
+    })),
+  }];
+  return JSON.stringify({ "@context": "https://schema.org", "@graph": graph }).replaceAll("<", "\\u003c");
+}
+
+function renderTopicPage({ topic, sites, allMatches, allSites, updatedDate }) {
+  const canonical = `${ORIGIN}/${topic.slug}/`;
+  const title = `${topic.label}推荐｜${allMatches.length} 家 AI API 中转站对比`;
+  const description = `${topic.label}专题收录 ${allMatches.length} 家公开资料相关的 AI API 中转站，对比在线率、延迟、模型数量和服务信息，并提供接入验证、计费与安全选择指南。`;
+  const stats = topicStats(allMatches);
+  const faq = topicFaq(topic);
+  const jsonLd = renderTopicStructuredData({ topic, canonical, title, description, sites, totalMatches: allMatches.length, updatedDate });
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <meta name="description" content="${escapeHtml(description)}" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="theme-color" content="#f4f0e8" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:url" content="${canonical}" />
+    <meta property="og:site_name" content="中转站推荐榜" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:image" content="${ORIGIN}/assets/og-image.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${ORIGIN}/assets/og-image.svg" />
+    <link rel="canonical" href="${canonical}" />
+    <link rel="alternate" hreflang="zh-CN" href="${canonical}" />
+    <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../assets/styles.min.css" />
+    <script type="application/ld+json">${jsonLd}</script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <header class="topbar">
+      <a class="wordmark" href="../" aria-label="中转站推荐榜首页"><span>中转站</span><strong>推荐榜</strong></a>
+      <nav aria-label="主要导航"><a href="../#ranking">推荐榜</a><a href="../#topics">模型专题</a><a href="../#guide">怎么选</a><a href="../#faq">常见问题</a></nav>
+    </header>
+    <main id="main">
+      <nav class="breadcrumbs" aria-label="面包屑"><a href="../">中转站推荐榜</a><span aria-hidden="true">/</span><span aria-current="page">${escapeHtml(topic.label)}</span></nav>
+      <section class="hero topic-hero">
+        <div class="hero__copy"><p class="eyebrow">MODEL DIRECTORY · ${updatedDate.replaceAll("-", ".")}</p><h1>${escapeHtml(topic.label)}<br /><em>推荐与对比</em></h1><p class="hero-copy">${escapeHtml(topic.intro)}</p><div class="hero-actions"><a href="#topic-ranking">查看候选站</a><a href="#topic-guide">阅读专项指南</a></div></div>
+        <aside class="hero__panel" aria-label="专题概览"><p>公开资料匹配</p><strong>${allMatches.length}</strong><span>家 ${escapeHtml(topic.label)}</span><dl><div><dt>本页展示</dt><dd>${sites.length} 家</dd></div><div><dt>在线率样本</dt><dd>${stats.uptime.sample}/${stats.total}</dd></div><div><dt>更新时间</dt><dd>${updatedDate}</dd></div></dl></aside>
+      </section>
+
+      <section class="topic-overview" aria-labelledby="topic-overview-title">
+        <div><p class="section-kicker">专题数据</p><h2 id="topic-overview-title">当前候选样本概览</h2><p>统计来自站点公开资料与当前榜单快照，仅用于了解样本覆盖。模型是否真实可用、价格是否准确，仍需在充值前独立验证。</p></div>
+        <dl class="topic-stat-grid"><div><dt>公开匹配</dt><dd>${stats.total} 家</dd><small>展示前 ${sites.length} 家</small></div><div><dt>在线率中位数</dt><dd>${formatStat(stats.uptime.value, formatUptime)}</dd><small>样本 ${stats.uptime.sample}/${stats.total}</small></div><div><dt>延迟中位数</dt><dd>${formatStat(stats.latency.value, formatLatency)}</dd><small>样本 ${stats.latency.sample}/${stats.total}</small></div><div><dt>模型数量中位数</dt><dd>${formatStat(stats.modelCount.value, (value) => `${number.format(value)} 个`)}</dd><small>样本 ${stats.modelCount.sample}/${stats.total}</small></div></dl>
+      </section>
+
+      ${renderTopicDirectory(allSites, topic.slug)}
+
+      <section class="topic-guide" id="topic-guide" aria-labelledby="topic-guide-title"><div><p class="section-kicker">专项验收</p><h2 id="topic-guide-title">选择 ${escapeHtml(topic.label)} 要检查什么</h2><p>${escapeHtml(topic.intro)} 建议使用固定测试集保存请求时间、模型名、错误码、Token 和扣费，以便对不同站点做可复现比较。</p></div><div class="topic-focus-grid">${topic.focus.map((item, index) => `<article><span>0${index + 1}</span><h3>${escapeHtml(item)}</h3><p>不要只查看模型名称；应在自己的客户端完成真实请求，并核对响应能力与请求级账单。</p></article>`).join("")}</div></section>
+
+      <section class="ranking topic-ranking" id="topic-ranking" aria-labelledby="topic-ranking-title"><div class="ranking-head"><div><p>MODEL RANKING / ${escapeHtml(topic.short)}</p><h2 id="topic-ranking-title">${escapeHtml(topic.label)}候选站</h2></div><p>展示前 ${sites.length} 家，共匹配 ${allMatches.length} 家</p></div><p class="ranking-note">候选站按综合榜单顺序展示。公开资料提及相关模型不代表当前通道始终可用，请点击站点信息核对最新模型列表、价格和限制。</p><div class="station-list">\n${sites.map(renderSite).join("\n")}\n        </div></section>
+
+      <section class="faq-section topic-faq" id="faq" aria-labelledby="topic-faq-title"><div class="section-kicker">专题常见问题</div><h2 id="topic-faq-title">${escapeHtml(topic.label)}常见问题</h2><div class="faq-list">${faq.map(([question, answer]) => `<details class="faq-item"><summary>${escapeHtml(question)}</summary><div class="faq-answer"><p>${escapeHtml(answer)}</p></div></details>`).join("")}</div></section>
+    </main>
+    <footer class="footer"><a class="wordmark" href="../"><span>中转站</span><strong>推荐榜</strong></a><p>公开信息用于初筛，使用 ${escapeHtml(topic.label)} 前请自行小额测试。</p><a href="#main">返回顶部 ↑</a></footer>
+  </body>
+</html>`;
+}
+
 function homeGuide() {
   const faq = FAQ.map(({ question, answer }) => `            <details class="faq-item">
               <summary>${escapeHtml(question)}</summary>
@@ -501,6 +688,7 @@ function renderStructuredData({ page, canonical, title, description, sites, tota
     isPartOf: { "@id": `${ORIGIN}/#website` },
     breadcrumb: { "@id": breadcrumbId },
     mainEntity: { "@id": `${canonical}#ranking` },
+    ...(page === 1 ? { hasPart: TOPICS.map((topic) => ({ "@id": `${ORIGIN}/${topic.slug}/#webpage` })) } : {}),
   });
   graph.push({
     "@type": "BreadcrumbList",
@@ -592,7 +780,7 @@ function renderPage({ page, totalPages, sites, allSites, updatedDate }) {
     <a class="skip-link" href="#main">跳到主要内容</a>
     <header class="topbar">
       <a class="wordmark" href="${root}/" aria-label="中转站推荐榜首页"><span>中转站</span><strong>推荐榜</strong></a>
-      <nav aria-label="主要导航"><a href="${root}/#ranking">推荐榜</a><a href="${root}/#guide">怎么选</a><a href="${root}/#faq">常见问题</a></nav>
+      <nav aria-label="主要导航"><a href="${root}/#ranking">推荐榜</a><a href="${root}/#topics">模型专题</a><a href="${root}/#guide">怎么选</a><a href="${root}/#faq">常见问题</a></nav>
     </header>
     <main id="main">
       ${renderBreadcrumbs(page, root)}
@@ -619,7 +807,7 @@ ${sites.map(renderSite).join("\n")}
         ${renderPagination(page, totalPages)}
       </section>
 
-${page === 1 ? homeGuide() : `      <section class="page-continue"><p>已经看完第 ${page} 页？</p><h2>回到选择指南，建立自己的测试标准</h2><a href="${root}/#guide">阅读中转站选择方法 →</a></section>`}
+${page === 1 ? `${renderTopicDirectory(allSites)}\n\n${homeGuide()}` : `      <section class="page-continue"><p>已经看完第 ${page} 页？</p><h2>回到选择指南，建立自己的测试标准</h2><a href="${root}/#guide">阅读中转站选择方法 →</a></section>`}
     </main>
     <footer class="footer">
       <a class="wordmark" href="${root}/"><span>中转站</span><strong>推荐榜</strong></a>
@@ -661,14 +849,17 @@ function minifyCss(css) {
 }
 
 function renderSitemap(totalPages, updatedDate) {
-  const urls = Array.from({ length: totalPages }, (_, index) => `${ORIGIN}${pagePath(index + 1)}`);
+  const urls = [
+    ...Array.from({ length: totalPages }, (_, index) => `${ORIGIN}${pagePath(index + 1)}`),
+    ...TOPICS.map((topic) => `${ORIGIN}/${topic.slug}/`),
+  ];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map((url, index) => `  <url>
     <loc>${url}</loc>
     <lastmod>${updatedDate}</lastmod>
     <changefreq>daily</changefreq>
-    <priority>${index === 0 ? "1.0" : "0.8"}</priority>
+    <priority>${index === 0 ? "1.0" : index < totalPages ? "0.8" : "0.9"}</priority>
   </url>`).join("\n")}
 </urlset>
 `;
@@ -691,6 +882,10 @@ async function build() {
   const sites = payload.sites.map(normalizeSite).sort((a, b) => a.rank - b.rank);
   const updatedDate = normalizeDate(payload.updatedDate) || new Date().toISOString().slice(0, 10);
   const totalPages = Math.ceil(sites.length / PAGE_SIZE);
+  const topicPages = TOPICS.map((topic) => {
+    const matches = sites.filter((site) => topicMatches(site, topic));
+    return { topic, matches, html: renderTopicPage({ topic, sites: matches.slice(0, PAGE_SIZE), allMatches: matches, allSites: sites, updatedDate }) };
+  });
   await cleanOldPages(totalPages);
   await atomicWrite(MINIFIED_STYLES_PATH, minifyCss(await readFile(STYLES_PATH, "utf8")));
 
@@ -699,8 +894,11 @@ async function build() {
     const target = page === 1 ? path.join(ROOT, "index.html") : path.join(PAGE_ROOT, String(page), "index.html");
     await atomicWrite(target, minifyHtml(renderPage({ page, totalPages, sites: pageSites, allSites: sites, updatedDate })));
   }
+  for (const { topic, html } of topicPages) {
+    await atomicWrite(path.join(ROOT, topic.slug, "index.html"), minifyHtml(html));
+  }
   await atomicWrite(path.join(ROOT, "sitemap.xml"), renderSitemap(totalPages, updatedDate));
-  process.stdout.write(`已生成 ${totalPages} 个分页，共 ${sites.length} 个站点；数据日期 ${updatedDate}\n`);
+  process.stdout.write(`已生成 ${totalPages} 个分页、${topicPages.length} 个模型专题，共 ${sites.length} 个站点；数据日期 ${updatedDate}\n`);
 }
 
 await build();

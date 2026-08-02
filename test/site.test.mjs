@@ -9,10 +9,28 @@ const data = JSON.parse(await readFile(path.join(root, "data.json"), "utf8"));
 const sites = [...data.sites].sort((a, b) => Number(a.rank) - Number(b.rank));
 const expectedPages = Math.ceil(sites.length / 50);
 const origin = "https://zhongzhuanzhan.github.io";
+const topics = [
+  { slug: "gpt-zhongzhuanzhan", label: "GPT 中转站", terms: ["gpt", "openai", "chatgpt"] },
+  { slug: "claude-zhongzhuanzhan", label: "Claude 中转站", terms: ["claude", "anthropic"] },
+  { slug: "codex-zhongzhuanzhan", label: "Codex 中转站", terms: ["codex"] },
+  { slug: "gemini-zhongzhuanzhan", label: "Gemini 中转站", terms: ["gemini"] },
+  { slug: "glm-zhongzhuanzhan", label: "GLM 中转站", terms: ["glm", "智谱"] },
+  { slug: "qwen-zhongzhuanzhan", label: "Qwen 中转站", terms: ["qwen", "通义", "千问"] },
+  { slug: "kimi-zhongzhuanzhan", label: "Kimi 中转站", terms: ["kimi", "moonshot", "月之暗面"] },
+];
 
 async function pageHtml(page) {
   const file = page === 1 ? path.join(root, "index.html") : path.join(root, "page", String(page), "index.html");
   return readFile(file, "utf8");
+}
+
+async function topicHtml(slug) {
+  return readFile(path.join(root, slug, "index.html"), "utf8");
+}
+
+function topicMatches(site, topic) {
+  const searchable = [site.name, site.description, ...(Array.isArray(site.models) ? site.models : [])].join(" ").toLowerCase();
+  return topic.terms.some((term) => searchable.includes(term.toLowerCase()));
 }
 
 function pageUrl(page) {
@@ -79,6 +97,44 @@ test("build generates the expected static pages", async () => {
     .filter((entry) => entry.isDirectory() && /^\d+$/.test(entry.name));
   assert.equal(directories.length, expectedPages - 1);
   await access(path.join(root, "page", String(expectedPages), "index.html"));
+  for (const topic of topics) await access(path.join(root, topic.slug, "index.html"));
+});
+
+test("model topic pages have unique metadata, content and structured data", async () => {
+  const titles = new Set();
+  const descriptions = new Set();
+  const canonicals = new Set();
+  const homepage = await pageHtml(1);
+  for (const topic of topics) {
+    const html = await topicHtml(topic.slug);
+    const canonical = `${origin}/${topic.slug}/`;
+    const matches = sites.filter((site) => topicMatches(site, topic));
+    const title = html.match(/<title>([^<]+)<\/title>/)?.[1];
+    const description = html.match(/<meta name="description" content="([^"]+)"/)?.[1];
+    assert.ok(title && description);
+    assert.ok(html.includes(`<link rel="canonical" href="${canonical}"`));
+    assert.ok(html.includes(`<h1>${topic.label}`));
+    assert.ok(html.includes('class="topic-overview"'));
+    assert.ok(html.includes('class="topic-focus-grid"'));
+    assert.ok(homepage.includes(`href="/${topic.slug}/"`));
+    assert.equal((html.match(/<h1(?:\s|>)/g) || []).length, 1);
+    const cards = (html.match(/<article class="station-card"/g) || []).length;
+    assert.equal(cards, Math.min(matches.length, 50));
+    assert.ok(cards > 0);
+    const json = extractJsonLd(html);
+    const itemList = json["@graph"].find((entry) => entry["@type"] === "ItemList");
+    const faq = json["@graph"].find((entry) => entry["@type"] === "FAQPage");
+    const breadcrumb = json["@graph"].find((entry) => entry["@type"] === "BreadcrumbList");
+    assert.equal(itemList.numberOfItems, matches.length);
+    assert.equal(itemList.itemListElement.length, cards);
+    assert.equal(faq.mainEntity.length, 4);
+    assert.equal(breadcrumb.itemListElement.length, 2);
+    assert.equal(breadcrumb.itemListElement.at(-1).item, canonical);
+    titles.add(title); descriptions.add(description); canonicals.add(canonical);
+  }
+  assert.equal(titles.size, topics.length);
+  assert.equal(descriptions.size, topics.length);
+  assert.equal(canonicals.size, topics.length);
 });
 
 test("every page contains no more than 50 unique station cards", async () => {
@@ -220,6 +276,12 @@ test("generated pages stay minified and use a valid minified stylesheet", async 
     assert.doesNotMatch(html, /\n\s*\n/);
     assert.doesNotThrow(() => extractJsonLd(html));
   }
+  for (const topic of topics) {
+    const html = await topicHtml(topic.slug);
+    assert.ok(html.includes("assets/styles.min.css"));
+    assert.doesNotMatch(html, /\n\s*\n/);
+    assert.doesNotThrow(() => extractJsonLd(html));
+  }
   assert.ok((await stat(path.join(root, "assets", "styles.min.css"))).size > 0);
 });
 
@@ -228,6 +290,7 @@ test("visible generated pages do not explain internal data provenance", async ()
   for (let page = 1; page <= expectedPages; page += 1) {
     assert.doesNotMatch(await pageHtml(page), forbidden);
   }
+  for (const topic of topics) assert.doesNotMatch(await topicHtml(topic.slug), forbidden);
 });
 
 test("homepage includes detailed selection, pricing and FAQ guidance", async () => {
@@ -258,6 +321,11 @@ test("sitemap, robots, resources and 404 remain coherent", async () => {
     const html = await pageHtml(page);
     canonicals.push(html.match(/<link rel="canonical" href="([^"]+)"/)?.[1]);
     await access(page === 1 ? path.join(root, "index.html") : path.join(root, "page", String(page), "index.html"));
+  }
+  for (const topic of topics) {
+    const html = await topicHtml(topic.slug);
+    canonicals.push(html.match(/<link rel="canonical" href="([^"]+)"/)?.[1]);
+    await access(path.join(root, topic.slug, "index.html"));
   }
   assert.deepEqual(locations, canonicals);
   assert.ok(locations.every((url) => !url.includes("/sites/") && !url.includes("/page/1/")));
