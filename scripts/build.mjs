@@ -251,7 +251,7 @@ ${paragraphs(site.description)}
               <div class="station-card__head">
                 <span class="rank-badge"><small>排名</small>${site.rank}</span>
                 <div class="station-title">
-                  <h2 id="station-${site.rank}"><a href="${url}" target="_blank" rel="nofollow noopener noreferrer">${escapeHtml(site.name)}</a></h2>
+                  <h2 id="station-${site.rank}"><a href="${url}" target="_blank" rel="nofollow noopener" referrerpolicy="origin">${escapeHtml(site.name)}</a></h2>
                   <p>成立日期：${escapeHtml(formatDate(site.establishedDate))}</p>
                 </div>
               </div>
@@ -268,7 +268,7 @@ ${fullDescription}
               </div>
               <div class="station-card__foot">
                 <p><span>退款：${status(site.supportsRefund)}</span><span>发票：${status(site.supportsInvoice)}</span></p>
-                <a class="detail-link" href="${url}" target="_blank" rel="nofollow noopener noreferrer" aria-label="查看 ${escapeHtml(site.name)} 的更多信息">查看站点信息 <span aria-hidden="true">↗</span></a>
+                <a class="detail-link" href="${url}" target="_blank" rel="nofollow noopener" referrerpolicy="origin" aria-label="查看 ${escapeHtml(site.name)} 的更多信息">查看站点信息 <span aria-hidden="true">↗</span></a>
               </div>
             </article>`;
 }
