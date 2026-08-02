@@ -230,6 +230,26 @@ test("visible generated pages do not explain internal data provenance", async ()
   }
 });
 
+test("homepage includes detailed selection, pricing and FAQ guidance", async () => {
+  const html = await pageHtml(1);
+  assert.ok(html.includes('id="pricing"'));
+  assert.ok(html.includes("官方标价折算用量 × 平台币换算系数 × 用户倍率"));
+  assert.ok(html.includes("5 × 1 × 0.1 = 0.5 元"));
+  assert.ok(html.includes("5 × 7 × 0.1 = 3.5 元"));
+  assert.ok(html.includes("官方按量 API 或合规代理"));
+  assert.ok(html.includes("订阅账号池"));
+  assert.ok(html.includes("第三方产品适配"));
+  assert.equal((html.match(/<details class="faq-item">/g) || []).length, 12);
+  const faq = graphType(html, "FAQPage");
+  assert.equal(faq.mainEntity.length, 12);
+  faq.mainEntity.forEach((entry) => {
+    assert.equal(entry["@type"], "Question");
+    assert.ok(entry.name.length > 5);
+    assert.equal(entry.acceptedAnswer["@type"], "Answer");
+    assert.ok(entry.acceptedAnswer.text.length > 80);
+  });
+});
+
 test("sitemap, robots, resources and 404 remain coherent", async () => {
   const sitemap = await readFile(path.join(root, "sitemap.xml"), "utf8");
   const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
