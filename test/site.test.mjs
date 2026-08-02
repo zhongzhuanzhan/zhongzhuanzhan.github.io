@@ -1,16 +1,26 @@
 import assert from "node:assert/strict";
-import { readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const data = JSON.parse(await readFile(path.join(root, "data.json"), "utf8"));
-const expectedPages = Math.ceil(data.sites.length / 50);
+const sites = [...data.sites].sort((a, b) => Number(a.rank) - Number(b.rank));
+const expectedPages = Math.ceil(sites.length / 50);
+const origin = "https://zhongzhuanzhan.github.io";
 
 async function pageHtml(page) {
   const file = page === 1 ? path.join(root, "index.html") : path.join(root, "page", String(page), "index.html");
   return readFile(file, "utf8");
+}
+
+function pageUrl(page) {
+  return page === 1 ? `${origin}/` : `${origin}/page/${page}/`;
+}
+
+function pageSites(page) {
+  return sites.slice((page - 1) * 50, page * 50);
 }
 
 function extractJsonLd(html) {
@@ -19,11 +29,56 @@ function extractJsonLd(html) {
   return JSON.parse(match[1]);
 }
 
+function graphType(html, type) {
+  return extractJsonLd(html)["@graph"].find((item) => item["@type"] === type);
+}
+
+function finite(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function zhNumber(value) {
+  return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value);
+}
+
+function uptime(value) {
+  return `${zhNumber(value)}%`;
+}
+
+function latency(value) {
+  return value >= 1000 ? `${zhNumber(value / 1000)} 秒` : `${Math.round(value)} 毫秒`;
+}
+
+function expectedObjectiveSummary(site) {
+  const parts = [`综合排名第 ${Number(site.rank)}`];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(site.establishedDate || ""))) parts.push(`成立日期 ${site.establishedDate}`);
+  if (finite(site.uptime) !== null) parts.push(`在线率 ${uptime(Number(site.uptime))}`);
+  if (finite(site.latencyMs) !== null) parts.push(`平均延迟 ${latency(Number(site.latencyMs))}`);
+  const models = Array.isArray(site.models) ? site.models.filter(Boolean) : [];
+  const modelCount = Math.max(0, Math.round(finite(site.modelCount) ?? models.length));
+  parts.push(`收录模型 ${modelCount} 个`);
+  if (finite(site.userRating) !== null && Number(site.ratingCount) > 0) {
+    parts.push(`用户评分 ${zhNumber(Number(site.userRating))}/5（${Math.round(Number(site.ratingCount))} 条评价）`);
+  }
+  if (typeof site.supportsRefund === "boolean") parts.push(`退款政策：${site.supportsRefund ? "支持" : "不支持"}`);
+  if (typeof site.supportsInvoice === "boolean") parts.push(`发票政策：${site.supportsInvoice ? "支持" : "不支持"}`);
+  return `${parts.join("；")}。`;
+}
+
 test("build generates the expected static pages", async () => {
   const directories = (await readdir(path.join(root, "page"), { withFileTypes: true }))
     .filter((entry) => entry.isDirectory() && /^\d+$/.test(entry.name));
   assert.equal(directories.length, expectedPages - 1);
-  await readFile(path.join(root, "page", String(expectedPages), "index.html"), "utf8");
+  await access(path.join(root, "page", String(expectedPages), "index.html"));
 });
 
 test("every page contains no more than 50 unique station cards", async () => {
@@ -34,38 +89,135 @@ test("every page contains no more than 50 unique station cards", async () => {
     assert.ok(pageRanks.length > 0 && pageRanks.length <= 50, `page ${page} card count`);
     ranks.push(...pageRanks);
   }
-  assert.equal(ranks.length, data.sites.length);
-  assert.equal(new Set(ranks).size, data.sites.length);
-  assert.deepEqual(ranks, data.sites.map((site) => Number(site.rank)));
+  assert.equal(ranks.length, sites.length);
+  assert.equal(new Set(ranks).size, sites.length);
+  assert.deepEqual(ranks, sites.map((site) => Number(site.rank)));
 });
 
-test("page metadata and JSON-LD are page specific", async () => {
+test("each page shows independently computed statistics with sample sizes", async () => {
+  const analyses = new Set();
   for (let page = 1; page <= expectedPages; page += 1) {
+    const current = pageSites(page);
     const html = await pageHtml(page);
-    const canonical = page === 1
-      ? "https://zhongzhuanzhan.github.io/"
-      : `https://zhongzhuanzhan.github.io/page/${page}/`;
-    assert.match(html, new RegExp(`<link rel="canonical" href="${canonical.replaceAll("/", "\\/")}"`));
-    const jsonLd = extractJsonLd(html);
-    const itemList = jsonLd["@graph"].find((item) => item["@type"] === "ItemList");
-    const expectedCount = Math.min(50, data.sites.length - (page - 1) * 50);
-    assert.equal(itemList.itemListElement.length, expectedCount);
+    const block = html.match(/<section class="page-analysis"[\s\S]*?<\/section>/)?.[0];
+    assert.ok(block, `page ${page} analysis`);
+    const total = current.length;
+    const uptimes = current.map((site) => finite(site.uptime)).filter((value) => value !== null);
+    const latencies = current.map((site) => finite(site.latencyMs)).filter((value) => value !== null);
+    const ratings = current
+      .filter((site) => Number(site.ratingCount) > 0)
+      .map((site) => finite(site.userRating)).filter((value) => value !== null);
+    const medianUptime = median(uptimes);
+    const medianLatency = median(latencies);
+    assert.ok(block.includes(`样本 ${uptimes.length}/${total}`));
+    assert.ok(block.includes(`样本 ${latencies.length}/${total}`));
+    assert.ok(block.includes(`样本 ${ratings.length}/${total}`));
+    assert.ok(block.includes(medianUptime === null ? "暂无可计算值" : uptime(medianUptime)));
+    assert.ok(block.includes(medianLatency === null ? "暂无可计算值" : latency(medianLatency)));
+    analyses.add(block.replace(/<[^>]+>/g, " "));
+  }
+  assert.equal(analyses.size, expectedPages, "page analyses should be unique");
+});
+
+test("metadata, ItemList and objective summaries are page specific", async () => {
+  for (let page = 1; page <= expectedPages; page += 1) {
+    const current = pageSites(page);
+    const html = await pageHtml(page);
+    const canonical = pageUrl(page);
+    assert.ok(html.includes(`<link rel="canonical" href="${canonical}"`));
+    const itemList = graphType(html, "ItemList");
+    assert.equal(itemList.numberOfItems, sites.length);
+    assert.equal(itemList.itemListElement.length, current.length);
+    itemList.itemListElement.forEach((entry, index) => {
+      const source = current[index];
+      assert.equal(entry["@type"], "ListItem");
+      assert.equal(entry.position, Number(source.rank));
+      assert.equal(entry.item["@type"], "Service");
+      assert.equal(entry.item.name, source.name);
+      assert.equal(entry.item.url, source.url.endsWith("/") ? source.url : `${source.url}/`);
+      assert.equal(entry.item.description, expectedObjectiveSummary(source));
+      if (source.description) assert.notEqual(entry.item.description, source.description);
+    });
   }
 });
 
+test("head pagination relationships are correct", async () => {
+  for (let page = 1; page <= expectedPages; page += 1) {
+    const html = await pageHtml(page);
+    const prev = [...html.matchAll(/<link rel="prev" href="([^"]+)"/g)].map((match) => match[1]);
+    const next = [...html.matchAll(/<link rel="next" href="([^"]+)"/g)].map((match) => match[1]);
+    assert.deepEqual(prev, page > 1 ? [pageUrl(page - 1)] : []);
+    assert.deepEqual(next, page < expectedPages ? [pageUrl(page + 1)] : []);
+    assert.doesNotMatch(html, /\/page\/1\//);
+  }
+});
+
+test("visible and structured breadcrumbs match each canonical", async () => {
+  for (let page = 1; page <= expectedPages; page += 1) {
+    const html = await pageHtml(page);
+    const visible = html.match(/<nav class="breadcrumbs" aria-label="面包屑">([\s\S]*?)<\/nav>/)?.[1];
+    assert.ok(visible);
+    assert.ok(visible.includes("中转站推荐榜"));
+    assert.ok(visible.includes('aria-current="page"'));
+    if (page > 1) assert.ok(visible.includes(`第 ${page} 页`));
+    const breadcrumb = graphType(html, "BreadcrumbList");
+    assert.equal(breadcrumb.itemListElement.length, page === 1 ? 1 : 2);
+    assert.deepEqual(breadcrumb.itemListElement.map((item) => item.position), page === 1 ? [1] : [1, 2]);
+    assert.equal(breadcrumb.itemListElement.at(-1).item, pageUrl(page));
+    const collection = graphType(html, "CollectionPage");
+    assert.equal(collection.breadcrumb["@id"], `${pageUrl(page)}#breadcrumb`);
+  }
+});
+
+test("titles, descriptions, canonicals and primary headings are unique", async () => {
+  const titles = new Set();
+  const descriptions = new Set();
+  const canonicals = new Set();
+  for (let page = 1; page <= expectedPages; page += 1) {
+    const html = await pageHtml(page);
+    const title = html.match(/<title>([^<]+)<\/title>/)?.[1];
+    const description = html.match(/<meta name="description" content="([^"]+)"/)?.[1];
+    const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
+    assert.ok(title && description && canonical);
+    assert.equal((html.match(/<h1(?:\s|>)/g) || []).length, 1);
+    assert.ok(html.match(/<h1[^>]*>[\s\S]*?<\/h1>/)?.[0].replace(/<[^>]+>/g, "").trim());
+    titles.add(title); descriptions.add(description); canonicals.add(canonical);
+  }
+  assert.equal(titles.size, expectedPages);
+  assert.equal(descriptions.size, expectedPages);
+  assert.equal(canonicals.size, expectedPages);
+});
+
 test("full descriptions are static and external links go to hvoy pages", async () => {
-  const firstWithDescription = data.sites.find((site) => site.description);
+  const firstWithDescription = sites.find((site) => site.description);
   const owningPage = Math.ceil(Number(firstWithDescription.rank) / 50);
   const html = await pageHtml(owningPage);
   const escapedOpening = firstWithDescription.description.slice(0, 25)
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
   assert.ok(html.includes(escapedOpening));
-  assert.ok(html.includes("<details class=\"site-intro\">"));
+  assert.ok(html.includes('<details class="site-intro">'));
   for (const match of html.matchAll(/class="detail-link" href="([^"]+)"/g)) {
     assert.match(match[1], /^https:\/\/www\.hvoy\.ai\/sites\//);
   }
   assert.doesNotMatch(html, /href="(?:\.\.\/)*sites\//);
+});
+
+test("generated pages stay minified and use a valid minified stylesheet", async () => {
+  const sourceCss = await readFile(path.join(root, "assets", "styles.css"), "utf8");
+  const minifiedCss = await readFile(path.join(root, "assets", "styles.min.css"), "utf8");
+  assert.ok(minifiedCss.length < sourceCss.length);
+  assert.ok(minifiedCss.includes("@media (max-width:680px)"));
+  assert.ok(minifiedCss.includes(".page-analysis"));
+  assert.doesNotMatch(minifiedCss, /\/\*/);
+  assert.doesNotMatch(minifiedCss, /\n\s*\n/);
+  for (let page = 1; page <= expectedPages; page += 1) {
+    const html = await pageHtml(page);
+    assert.ok(html.includes("assets/styles.min.css"));
+    assert.doesNotMatch(html, /\n\s*\n/);
+    assert.doesNotThrow(() => extractJsonLd(html));
+  }
+  assert.ok((await stat(path.join(root, "assets", "styles.min.css"))).size > 0);
 });
 
 test("visible generated pages do not explain internal data provenance", async () => {
@@ -75,11 +227,22 @@ test("visible generated pages do not explain internal data provenance", async ()
   }
 });
 
-test("sitemap includes only the home page and actual pagination", async () => {
+test("sitemap, robots, resources and 404 remain coherent", async () => {
   const sitemap = await readFile(path.join(root, "sitemap.xml"), "utf8");
   const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-  assert.equal(locations.length, expectedPages);
-  assert.equal(locations[0], "https://zhongzhuanzhan.github.io/");
-  assert.equal(locations.at(-1), `https://zhongzhuanzhan.github.io/page/${expectedPages}/`);
-  assert.ok(locations.every((url) => !url.includes("/sites/")));
+  const canonicals = [];
+  for (let page = 1; page <= expectedPages; page += 1) {
+    const html = await pageHtml(page);
+    canonicals.push(html.match(/<link rel="canonical" href="([^"]+)"/)?.[1]);
+    await access(page === 1 ? path.join(root, "index.html") : path.join(root, "page", String(page), "index.html"));
+  }
+  assert.deepEqual(locations, canonicals);
+  assert.ok(locations.every((url) => !url.includes("/sites/") && !url.includes("/page/1/")));
+  const robots = await readFile(path.join(root, "robots.txt"), "utf8");
+  assert.ok(robots.includes(`${origin}/sitemap.xml`));
+  const notFound = await readFile(path.join(root, "404.html"), "utf8");
+  assert.match(notFound, /name="robots" content="noindex, follow"/);
+  assert.ok(notFound.includes("/assets/styles.min.css"));
+  await access(path.join(root, "assets", "favicon.svg"));
+  await access(path.join(root, "assets", "og-image.svg"));
 });

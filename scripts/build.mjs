@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "data.json");
 const PAGE_ROOT = path.join(ROOT, "page");
+const STYLES_PATH = path.join(ROOT, "assets", "styles.css");
+const MINIFIED_STYLES_PATH = path.join(ROOT, "assets", "styles.min.css");
 const SOURCE_URL = process.env.DATA_SOURCE_URL
   || "https://raw.githubusercontent.com/hvoyai/awesome-ai-api/main/data.json";
 const ORIGIN = "https://zhongzhuanzhan.github.io";
@@ -137,6 +139,79 @@ function status(value) {
   return value === true ? "支持" : value === false ? "不支持" : "待确认";
 }
 
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function pageStats(sites) {
+  const uptimes = [];
+  const latencies = [];
+  const modelCounts = [];
+  const ratings = [];
+  const summary = {
+    total: sites.length,
+    refund: { yes: 0, known: 0 },
+    invoice: { yes: 0, known: 0 },
+    descriptions: 0,
+    established: 0,
+    modelDetails: 0,
+    paymentDetails: 0,
+  };
+
+  for (const site of sites) {
+    if (site.uptime !== null) uptimes.push(site.uptime);
+    if (site.latencyMs !== null) latencies.push(site.latencyMs);
+    if (site.modelCount !== null) modelCounts.push(site.modelCount);
+    if (site.userRating !== null && site.ratingCount > 0) ratings.push(site.userRating);
+    if (site.supportsRefund !== null) {
+      summary.refund.known += 1;
+      if (site.supportsRefund) summary.refund.yes += 1;
+    }
+    if (site.supportsInvoice !== null) {
+      summary.invoice.known += 1;
+      if (site.supportsInvoice) summary.invoice.yes += 1;
+    }
+    if (site.description) summary.descriptions += 1;
+    if (site.establishedDate) summary.established += 1;
+    if (site.models.length) summary.modelDetails += 1;
+    if (site.paymentMethods.length) summary.paymentDetails += 1;
+  }
+
+  return {
+    ...summary,
+    uptime: { value: median(uptimes), sample: uptimes.length },
+    latency: { value: median(latencies), sample: latencies.length },
+    modelCount: { value: median(modelCounts), sample: modelCounts.length },
+    rating: { value: median(ratings), sample: ratings.length },
+  };
+}
+
+function formatStat(value, formatter) {
+  return value === null ? "暂无可计算值" : formatter(value);
+}
+
+function renderPageAnalysis(stats, first, last) {
+  const summary = `排名 ${first}–${last} 的 ${stats.total} 家站点中，${stats.descriptions} 家收录了简介，${stats.established} 家收录了成立日期，${stats.modelDetails} 家提供模型厂商明细，${stats.paymentDetails} 家提供支付方式信息。退款政策已知 ${stats.refund.known} 家，其中 ${stats.refund.yes} 家明确支持；发票政策已知 ${stats.invoice.known} 家，其中 ${stats.invoice.yes} 家明确支持。`;
+  return `<section class="page-analysis" aria-labelledby="page-analysis-title"><div class="page-analysis__head"><div><p>PAGE DATA / ${first}–${last}</p><h3 id="page-analysis-title">本页数据概览</h3></div><p>${escapeHtml(summary)}</p></div><dl class="analysis-grid"><div><dt>在线率中位数</dt><dd>${formatStat(stats.uptime.value, formatUptime)}</dd><small>样本 ${stats.uptime.sample}/${stats.total}</small></div><div><dt>延迟中位数</dt><dd>${formatStat(stats.latency.value, formatLatency)}</dd><small>样本 ${stats.latency.sample}/${stats.total}</small></div><div><dt>模型数量中位数</dt><dd>${formatStat(stats.modelCount.value, (value) => `${number.format(value)} 个`)}</dd><small>样本 ${stats.modelCount.sample}/${stats.total}</small></div><div><dt>用户评分中位数</dt><dd>${formatStat(stats.rating.value, (value) => `${number.format(value)} / 5`)}</dd><small>样本 ${stats.rating.sample}/${stats.total}</small></div></dl></section>`;
+}
+
+function objectiveSiteSummary(site) {
+  const parts = [`综合排名第 ${site.rank}`];
+  if (site.establishedDate) parts.push(`成立日期 ${site.establishedDate}`);
+  if (site.uptime !== null) parts.push(`在线率 ${formatUptime(site.uptime)}`);
+  if (site.latencyMs !== null) parts.push(`平均延迟 ${formatLatency(site.latencyMs)}`);
+  parts.push(`收录模型 ${site.modelCount} 个`);
+  if (site.userRating !== null && site.ratingCount > 0) {
+    parts.push(`用户评分 ${number.format(site.userRating)}/5（${site.ratingCount} 条评价）`);
+  }
+  if (site.supportsRefund !== null) parts.push(`退款政策：${status(site.supportsRefund)}`);
+  if (site.supportsInvoice !== null) parts.push(`发票政策：${status(site.supportsInvoice)}`);
+  return `${parts.join("；")}。`;
+}
+
 function descriptionSummary(text, limit = 86) {
   const compact = text.replace(/\s+/g, " ").trim();
   return compact.length > limit ? `${compact.slice(0, limit).trim()}…` : compact;
@@ -206,6 +281,20 @@ function relativeRoot(page) {
   return page === 1 ? "." : "../..";
 }
 
+function pageRelations(page, totalPages) {
+  return {
+    previous: page > 1 ? `${ORIGIN}${pagePath(page - 1)}` : "",
+    next: page < totalPages ? `${ORIGIN}${pagePath(page + 1)}` : "",
+  };
+}
+
+function renderBreadcrumbs(page, root) {
+  if (page === 1) {
+    return '<nav class="breadcrumbs" aria-label="面包屑"><span aria-current="page">中转站推荐榜</span></nav>';
+  }
+  return `<nav class="breadcrumbs" aria-label="面包屑"><a href="${root}/">中转站推荐榜</a><span aria-hidden="true">/</span><span aria-current="page">第 ${page} 页</span></nav>`;
+}
+
 function renderPagination(current, total) {
   const pages = new Set([1, total]);
   for (let page = Math.max(1, current - 2); page <= Math.min(total, current + 2); page += 1) pages.add(page);
@@ -267,8 +356,15 @@ ${faq}
       </section>`;
 }
 
-function renderStructuredData({ page, canonical, title, description, sites, updatedDate }) {
+function renderStructuredData({ page, canonical, title, description, sites, totalSites, updatedDate }) {
   const graph = [];
+  const breadcrumbId = `${canonical}#breadcrumb`;
+  const breadcrumbItems = [
+    { "@type": "ListItem", position: 1, name: "中转站推荐榜", item: `${ORIGIN}/` },
+  ];
+  if (page > 1) {
+    breadcrumbItems.push({ "@type": "ListItem", position: 2, name: `第 ${page} 页`, item: canonical });
+  }
   if (page === 1) {
     graph.push({
       "@type": "WebSite",
@@ -288,20 +384,29 @@ function renderStructuredData({ page, canonical, title, description, sites, upda
     inLanguage: "zh-CN",
     dateModified: updatedDate,
     isPartOf: { "@id": `${ORIGIN}/#website` },
+    breadcrumb: { "@id": breadcrumbId },
     mainEntity: { "@id": `${canonical}#ranking` },
+  });
+  graph.push({
+    "@type": "BreadcrumbList",
+    "@id": breadcrumbId,
+    itemListElement: breadcrumbItems,
   });
   graph.push({
     "@type": "ItemList",
     "@id": `${canonical}#ranking`,
     name: page === 1 ? "AI API 中转站推荐榜" : `AI API 中转站推荐榜第 ${page} 页`,
-    numberOfItems: sites.length,
+    numberOfItems: totalSites,
     itemListOrder: "https://schema.org/ItemListOrderAscending",
     itemListElement: sites.map((site) => ({
       "@type": "ListItem",
       position: site.rank,
-      name: site.name,
-      url: site.url,
-      ...(site.description ? { description: descriptionSummary(site.description, 180) } : {}),
+      item: {
+        "@type": "Service",
+        name: site.name,
+        url: site.url,
+        description: objectiveSiteSummary(site),
+      },
     })),
   });
   if (page === 1) {
@@ -315,7 +420,7 @@ function renderStructuredData({ page, canonical, title, description, sites, upda
       })),
     });
   }
-  return JSON.stringify({ "@context": "https://schema.org", "@graph": graph }, null, 2).replaceAll("<", "\\u003c");
+  return JSON.stringify({ "@context": "https://schema.org", "@graph": graph }).replaceAll("<", "\\u003c");
 }
 
 function renderPage({ page, totalPages, sites, allSites, updatedDate }) {
@@ -329,7 +434,9 @@ function renderPage({ page, totalPages, sites, allSites, updatedDate }) {
   const description = page === 1
     ? `中转站推荐榜收录 ${allSites.length} 家 AI API 中转站，对比在线率、响应延迟、模型覆盖、支付方式、退款与发票信息，并提供稳定性、计费和安全选择指南。`
     : `中转站推荐榜第 ${page} 页，查看排名 ${first} 至 ${last} 的 AI API 中转站简介、成立日期、在线率、延迟、模型数量、用户评分和服务信息。`;
-  const jsonLd = renderStructuredData({ page, canonical, title, description, sites, updatedDate });
+  const stats = pageStats(sites);
+  const relations = pageRelations(page, totalPages);
+  const jsonLd = renderStructuredData({ page, canonical, title, description, sites, totalSites: allSites.length, updatedDate });
   const hero = page === 1
     ? `<p class="eyebrow">AI API SERVICE INDEX · ${updatedDate.replaceAll("-", ".")}</p>
           <h1>找到更适合你的<br /><em>AI API 中转站</em></h1>
@@ -360,11 +467,11 @@ function renderPage({ page, totalPages, sites, allSites, updatedDate }) {
     <meta name="twitter:image" content="${ORIGIN}/assets/og-image.svg" />
     <link rel="canonical" href="${canonical}" />
     <link rel="alternate" hreflang="zh-CN" href="${canonical}" />
+    ${relations.previous ? `<link rel="prev" href="${relations.previous}" />` : ""}
+    ${relations.next ? `<link rel="next" href="${relations.next}" />` : ""}
     <link rel="icon" href="${root}/assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="${root}/assets/styles.css" />
-    <script type="application/ld+json">
-${jsonLd.split("\n").map((line) => `      ${line}`).join("\n")}
-    </script>
+    <link rel="stylesheet" href="${root}/assets/styles.min.css" />
+    <script type="application/ld+json">${jsonLd}</script>
   </head>
   <body>
     <a class="skip-link" href="#main">跳到主要内容</a>
@@ -373,6 +480,7 @@ ${jsonLd.split("\n").map((line) => `      ${line}`).join("\n")}
       <nav aria-label="主要导航"><a href="${root}/#ranking">推荐榜</a><a href="${root}/#guide">怎么选</a><a href="${root}/#faq">常见问题</a></nav>
     </header>
     <main id="main">
+      ${renderBreadcrumbs(page, root)}
       <section class="hero">
         <div class="hero__copy">
           ${hero}
@@ -389,6 +497,7 @@ ${jsonLd.split("\n").map((line) => `      ${line}`).join("\n")}
           <p>当前显示第 ${first}–${last} 名，共 ${allSites.length} 家</p>
         </div>
         <p class="ranking-note">指标会随线路和服务状态变化。建议结合自己的网络、模型与调用方式进行小额测试，不要仅凭单次测速或宣传价格决定长期使用。</p>
+        ${renderPageAnalysis(stats, first, last)}
         <div class="station-list">
 ${sites.map(renderSite).join("\n")}
         </div>
@@ -405,6 +514,35 @@ ${page === 1 ? homeGuide() : `      <section class="page-continue"><p>已经看�
   </body>
 </html>
 `;
+}
+
+function minifyHtml(html) {
+  return html
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("")
+    .replace(/>\s+</g, "><")
+    .concat("\n");
+}
+
+function minifyCss(css) {
+  const strings = [];
+  const protectedCss = css.replace(/(["'])(?:\\.|(?!\1)[^\\])*\1/g, (match) => {
+    const token = `___CSS_STRING_${strings.length}___`;
+    strings.push(match);
+    return token;
+  });
+  let minified = protectedCss
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*([{}:;,])\s*/g, "$1")
+    .replace(/;}/g, "}")
+    .trim();
+  strings.forEach((value, index) => {
+    minified = minified.replace(`___CSS_STRING_${index}___`, value);
+  });
+  return `${minified}\n`;
 }
 
 function renderSitemap(totalPages, updatedDate) {
@@ -439,11 +577,12 @@ async function build() {
   const updatedDate = normalizeDate(payload.updatedDate) || new Date().toISOString().slice(0, 10);
   const totalPages = Math.ceil(sites.length / PAGE_SIZE);
   await cleanOldPages(totalPages);
+  await atomicWrite(MINIFIED_STYLES_PATH, minifyCss(await readFile(STYLES_PATH, "utf8")));
 
   for (let page = 1; page <= totalPages; page += 1) {
     const pageSites = sites.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     const target = page === 1 ? path.join(ROOT, "index.html") : path.join(PAGE_ROOT, String(page), "index.html");
-    await atomicWrite(target, renderPage({ page, totalPages, sites: pageSites, allSites: sites, updatedDate }));
+    await atomicWrite(target, minifyHtml(renderPage({ page, totalPages, sites: pageSites, allSites: sites, updatedDate })));
   }
   await atomicWrite(path.join(ROOT, "sitemap.xml"), renderSitemap(totalPages, updatedDate));
   process.stdout.write(`已生成 ${totalPages} 个分页，共 ${sites.length} 个站点；数据日期 ${updatedDate}\n`);
