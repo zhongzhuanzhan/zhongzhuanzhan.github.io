@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">中转站推荐榜</title><desc id="desc">AI API 中转站排名与选择指南</desc>
+  <rect width="1200" height="630" fill="#f4f0e8"/>
+  <circle cx="1070" cy="110" r="190" fill="#c9ee4f"/>
+  <rect x="72" y="72" width="1056" height="486" rx="42" fill="#0c3526"/>
+  <text x="130" y="185" fill="#c9ee4f" font-family="Arial, sans-serif" font-size="26" font-weight="700" letter-spacing="6">AI API SERVICE INDEX</text>
+  <text x="125" y="330" fill="#ffffff" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="100" font-weight="800">中转站推荐榜</text>
+  <text x="130" y="420" fill="#bdcbc2" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="38">比较运行表现 · 模型覆盖 · 用户评价 · 服务政策</text>
+  <rect x="130" y="475" width="260" height="12" rx="6" fill="#ee7050"/>
+</svg>

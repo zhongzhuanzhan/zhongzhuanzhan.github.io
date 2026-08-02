@@ -1,0 +1,57 @@
+name: Update static ranking
+
+on:
+  schedule:
+    - cron: "23 2,14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-static-ranking
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Sync data and build pages
+        run: |
+          for attempt in 1 2 3; do
+            if npm run sync; then
+              exit 0
+            fi
+            echo "Attempt ${attempt} failed"
+            sleep $((attempt * 20))
+          done
+          exit 1
+
+      - name: Verify generated site
+        run: npm test
+
+      - name: Commit updated snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- data.json index.html page sitemap.xml
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "chore: update ranking pages"
+          for attempt in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            git pull --rebase
+          done
+          exit 1
