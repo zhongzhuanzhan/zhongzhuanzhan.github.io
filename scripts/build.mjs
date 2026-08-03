@@ -479,10 +479,10 @@ function renderTopicDirectory(allSites, currentSlug = "") {
     const link = currentSlug === topic.slug
       ? `<span class="topic-directory__current" aria-current="page">当前专题</span>`
       : `<a href="/${topic.slug}/">查看 ${escapeHtml(topic.label)} →</a>`;
-    return `          <article><span>${escapeHtml(topic.short)}</span><h3>${escapeHtml(topic.label)}</h3><p>${escapeHtml(topic.intro)}</p><div><strong>${matches.length}</strong><small>家公开资料匹配</small>${link}</div></article>`;
+    return `          <article><span>${escapeHtml(topic.short)}</span><h3>${escapeHtml(topic.label)}</h3><p>${escapeHtml(topic.intro)}</p><div><strong>${matches.length}</strong><small>家相关站点</small>${link}</div></article>`;
   }).join("\n");
   return `      <section class="topic-directory" id="topics" aria-labelledby="topics-title">
-        <div class="topic-directory__head"><div><p class="section-kicker">模型专题</p><h2 id="topics-title">按模型查找中转站</h2></div><p>每个专题都提供独立候选列表、数据概览、接入检查项和常见问题。公开资料匹配只用于建立候选范围，实际模型与价格仍需进入站点核对并小额测试。</p></div>
+        <div class="topic-directory__head"><div><p class="section-kicker">模型专题</p><h2 id="topics-title">按模型查找中转站</h2></div><p>先选择需要的模型，再比较运行表现、价格和服务政策；充值前请进入站点核对并小额测试。</p></div>
         <div class="topic-directory__grid">
 ${cards}
         </div>
@@ -560,12 +560,12 @@ function renderTopicPage({ topic, sites, allMatches, allSites, updatedDate }) {
       <nav class="breadcrumbs" aria-label="面包屑"><a href="../">中转站推荐榜</a><span aria-hidden="true">/</span><span aria-current="page">${escapeHtml(topic.label)}</span></nav>
       <section class="hero topic-hero">
         <div class="hero__copy"><p class="eyebrow">MODEL DIRECTORY · ${updatedDate.replaceAll("-", ".")}</p><h1>${escapeHtml(topic.label)}<br /><em>推荐与对比</em></h1><p class="hero-copy">${escapeHtml(topic.intro)}</p><div class="hero-actions"><a href="#topic-ranking">查看候选站</a><a href="#topic-guide">阅读专项指南</a></div></div>
-        <aside class="hero__panel" aria-label="专题概览"><p>公开资料匹配</p><strong>${allMatches.length}</strong><span>家 ${escapeHtml(topic.label)}</span><dl><div><dt>本页展示</dt><dd>${sites.length} 家</dd></div><div><dt>在线率样本</dt><dd>${stats.uptime.sample}/${stats.total}</dd></div><div><dt>更新时间</dt><dd>${updatedDate}</dd></div></dl></aside>
+        <aside class="hero__panel" aria-label="专题概览"><p>相关站点</p><strong>${allMatches.length}</strong><span>家 ${escapeHtml(topic.label)}</span><dl><div><dt>本页展示</dt><dd>${sites.length} 家</dd></div><div><dt>在线率样本</dt><dd>${stats.uptime.sample}/${stats.total}</dd></div><div><dt>更新时间</dt><dd>${updatedDate}</dd></div></dl></aside>
       </section>
 
       <section class="topic-overview" aria-labelledby="topic-overview-title">
-        <div><p class="section-kicker">专题数据</p><h2 id="topic-overview-title">当前候选样本概览</h2><p>统计来自站点公开资料与当前榜单快照，仅用于了解样本覆盖。模型是否真实可用、价格是否准确，仍需在充值前独立验证。</p></div>
-        <dl class="topic-stat-grid"><div><dt>公开匹配</dt><dd>${stats.total} 家</dd><small>展示前 ${sites.length} 家</small></div><div><dt>在线率中位数</dt><dd>${formatStat(stats.uptime.value, formatUptime)}</dd><small>样本 ${stats.uptime.sample}/${stats.total}</small></div><div><dt>延迟中位数</dt><dd>${formatStat(stats.latency.value, formatLatency)}</dd><small>样本 ${stats.latency.sample}/${stats.total}</small></div><div><dt>模型数量中位数</dt><dd>${formatStat(stats.modelCount.value, (value) => `${number.format(value)} 个`)}</dd><small>样本 ${stats.modelCount.sample}/${stats.total}</small></div></dl>
+        <div><p class="section-kicker">专题数据</p><h2 id="topic-overview-title">候选站概览</h2><p>模型与价格可能变化，请在充值前核对当前列表，并用自己的任务完成测试。</p></div>
+        <dl class="topic-stat-grid"><div><dt>相关站点</dt><dd>${stats.total} 家</dd><small>展示前 ${sites.length} 家</small></div><div><dt>在线率中位数</dt><dd>${formatStat(stats.uptime.value, formatUptime)}</dd><small>样本 ${stats.uptime.sample}/${stats.total}</small></div><div><dt>延迟中位数</dt><dd>${formatStat(stats.latency.value, formatLatency)}</dd><small>样本 ${stats.latency.sample}/${stats.total}</small></div><div><dt>模型数量中位数</dt><dd>${formatStat(stats.modelCount.value, (value) => `${number.format(value)} 个`)}</dd><small>样本 ${stats.modelCount.sample}/${stats.total}</small></div></dl>
       </section>
 
       ${renderTopicDirectory(allSites, topic.slug)}
