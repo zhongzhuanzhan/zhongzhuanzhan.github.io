@@ -254,7 +254,7 @@ test("full descriptions are static and external links go to hvoy pages", async (
   assert.ok(html.includes(escapedOpening));
   assert.ok(html.includes('<details class="site-intro">'));
   for (const match of html.matchAll(/class="detail-link" href="([^"]+)"[^>]*rel="([^"]+)"[^>]*referrerpolicy="([^"]+)"/g)) {
-    assert.match(match[1], /^https:\/\/www\.hvoy\.ai\/sites\//);
+    assert.match(match[1], /^https:\/\/www\.(?:hvoy\.ai|hvoyai\.com)\/sites\//);
     assert.equal(match[2], "nofollow noopener");
     assert.equal(match[3], "origin");
   }
